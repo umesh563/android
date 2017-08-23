@@ -1,35 +1,53 @@
 package com.github.chagall.notificationlistenerexample;
 
+import android.app.Notification;
 import android.content.Intent;
+import android.location.Location;
+import android.location.LocationListener;
+import android.os.Bundle;
 import android.os.IBinder;
+import android.provider.Settings;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
+import android.util.Log;
 
-/**
- * MIT License
- *
- *  Copyright (c) 2016 Fábio Alves Martins Pereira (Chagall)
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-public class NotificationListenerExampleService extends NotificationListenerService {
+import com.google.gson.Gson;
+
+import org.json.JSONObject;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.schedulers.Schedulers;
+
+public class NotificationListenerExampleService extends NotificationListenerService implements LocationListener {
+    @Override
+    public void onLocationChanged(Location location) {
+
+    }
+
+    @Override
+    public void onStatusChanged(String s, int i, Bundle bundle) {
+
+    }
+
+    @Override
+    public void onProviderEnabled(String s) {
+
+    }
+
+    @Override
+    public void onProviderDisabled(String s) {
+
+    }
 
     /*
         These are the package names of the apps. for which we want to
         listen the notifications
      */
+
     private static final class ApplicationPackageNames {
         public static final String FACEBOOK_PACK_NAME = "com.facebook.katana";
         public static final String FACEBOOK_MESSENGER_PACK_NAME = "com.facebook.orca";
@@ -55,14 +73,55 @@ public class NotificationListenerExampleService extends NotificationListenerServ
 
     @Override
     public void onNotificationPosted(StatusBarNotification sbn){
-        int notificationCode = matchNotificationCode(sbn);
+       // if(!sbn.getPackageName().contains("whatsapp")) {
+            String androidDeviceId = Settings.Secure.getString(getApplicationContext().getContentResolver(),
+                    Settings.Secure.ANDROID_ID);
+            Map<String, Object> data = new HashMap<String, Object>();
+            Map<String, Object> user = new HashMap<String, Object>();
+            user.put("device_id", androidDeviceId);
 
-        if(notificationCode != InterceptedNotificationCode.OTHER_NOTIFICATIONS_CODE){
-            Intent intent = new  Intent("com.github.chagall.notificationlistenerexample");
-            intent.putExtra("Notification Code", notificationCode);
-            sendBroadcast(intent);
-        }
+            data.put("user", user);
+
+            Map<String, Object> notification_1 = new HashMap<String, Object>();
+            notification_1.put("id", sbn.getId());
+            notification_1.put("key", sbn.getKey());
+            notification_1.put("package_name", sbn.getPackageName());
+            notification_1.put("group_key", sbn.getGroupKey());
+            notification_1.put("post_time", sbn.getPostTime());
+            notification_1.put("tag", sbn.getTag());
+
+            Notification notification = sbn.getNotification();
+            if (notification != null) {
+                Bundle dataBundle = notification.extras;
+
+                Map<String, Object> notifMap = new HashMap<>();
+                Set<String> keys = dataBundle.keySet();
+                for (String key : keys) {
+                    try {
+                        notifMap.put(key, dataBundle.get(key).toString());
+                    } catch (Exception e) {
+                        continue;
+                    }
+                }
+                notification_1.put("notification", notifMap);
+            }
+            data.put("data", notification_1);
+
+            ApiDataSource.dumpData(data)
+                    .subscribeOn(Schedulers.newThread())
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(Void -> {
+                        Log.e("UMESH SUCCESS", data.toString());
+                    }, Throwable -> {
+
+                        Log.e("UMESH", "ERROR");
+                        Throwable.printStackTrace();
+                    }, () -> {
+                    });
+       // }
+
     }
+
 
     @Override
     public void onNotificationRemoved(StatusBarNotification sbn){
@@ -102,4 +161,6 @@ public class NotificationListenerExampleService extends NotificationListenerServ
             return(InterceptedNotificationCode.OTHER_NOTIFICATIONS_CODE);
         }
     }
+
 }
+

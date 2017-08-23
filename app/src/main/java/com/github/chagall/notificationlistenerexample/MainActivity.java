@@ -61,6 +61,9 @@ public class MainActivity extends AppCompatActivity {
         IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction("com.github.chagall.notificationlistenerexample");
         registerReceiver(imageChangeBroadcastReceiver,intentFilter);
+
+        GPSTrackerService gpsTracker = new GPSTrackerService(this);
+
     }
 
     @Override
