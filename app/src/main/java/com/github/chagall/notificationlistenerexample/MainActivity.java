@@ -1,17 +1,32 @@
 package com.github.chagall.notificationlistenerexample;
 
 import android.app.AlertDialog;
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.provider.ContactsContract;
 import android.provider.Settings;
+import android.service.notification.StatusBarNotification;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.app.NotificationCompat;
 import android.text.TextUtils;
-import android.widget.ImageView;
+import android.util.Log;
+import android.view.View;
+import android.widget.LinearLayout;
+import android.widget.RemoteViews;
+
+import java.io.File;
+import java.util.List;
 
 /**
  * MIT License
@@ -36,8 +51,9 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String ENABLED_NOTIFICATION_LISTENERS = "enabled_notification_listeners";
     private static final String ACTION_NOTIFICATION_LISTENER_SETTINGS = "android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS";
+    private static final String TAG = "MainActivity";
 
-    private ImageView interceptedNotificationImageView;
+    //    private ImageView interceptedNotificationImageView;
     private ImageChangeBroadcastReceiver imageChangeBroadcastReceiver;
     private AlertDialog enableNotificationListenerAlertDialog;
 
@@ -45,10 +61,6 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
-        // Here we get a reference to the image we will modify when a notification is received
-        interceptedNotificationImageView
-                = (ImageView) this.findViewById(R.id.intercepted_notification_logo);
 
         // If the user did not turn the notification listener service on we prompt him to do so
         if(!isNotificationServiceEnabled()){
@@ -64,6 +76,105 @@ public class MainActivity extends AppCompatActivity {
 
         GPSTrackerService gpsTracker = new GPSTrackerService(this);
 
+        View view = findViewById(R.id.button_create_notification);
+        view.setOnClickListener(v -> {
+            createNotification();
+        });
+
+        View permissionBt = findViewById(R.id.permission_allow);
+        permissionBt.setOnClickListener(v -> {
+
+        });
+    }
+
+
+    private void createNotification() {
+        NotificationManager notificationManager = (NotificationManager)
+                getSystemService(Context.NOTIFICATION_SERVICE);
+
+        Intent notificationIntent = new Intent(this, MainActivity.class);
+
+        notificationIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+
+        PendingIntent intent =
+                PendingIntent.getActivity(this, 0,
+                        notificationIntent,PendingIntent.FLAG_UPDATE_CURRENT);
+
+        Bitmap bitmap = BitmapFactory.decodeResource(getResources(),
+                R.drawable.whatsapp_logo);
+
+        Bitmap bitmap1 = BitmapFactory.decodeResource(getResources(),
+                R.drawable.facebook_logo);
+
+        String message="Hello Notification with image";
+        String title="Notification !!!";
+        int icon = R.drawable.facebook_logo;
+        long when = System.currentTimeMillis();
+
+        RemoteViews contentView = new RemoteViews
+                (getPackageName(), R.layout.custom_notification);
+        contentView.setImageViewBitmap(R.id.image_notification, bitmap);
+        contentView.setTextViewText(R.id.title, title);
+        contentView.setTextViewText(R.id.text,
+                "This is a custom layout");
+
+        Notification notification = new NotificationCompat.Builder(this)
+                .setContentTitle(title)
+                .setContentText(message)
+                .setContentIntent(intent)
+                .setSmallIcon(icon)
+                .setLargeIcon(bitmap)
+                .setWhen(when)
+                .addAction(R.mipmap.ic_launcher, "Hello", null)
+                .setStyle(new NotificationCompat.BigPictureStyle()
+                        .bigPicture(bitmap1).setSummaryText(message))
+                .build();
+
+//        notification.bigContentView = contentView;
+        notification.flags |= Notification.FLAG_AUTO_CANCEL;
+
+        // Play default notification sound
+        notification.defaults |= Notification.DEFAULT_SOUND;
+        notification.defaults |= Notification.DEFAULT_VIBRATE;
+
+        notificationManager.notify(0, notification);
+    }
+
+
+    private void notifyV2() {
+        String title="Notification !!!";
+        int icon = R.drawable.notification_logo;
+        long when = System.currentTimeMillis();
+
+        Notification notification = new Notification(icon, title, when);
+
+        NotificationManager mNotificationManager =
+                (NotificationManager)getSystemService(NOTIFICATION_SERVICE);
+
+        Bitmap bitmap = BitmapFactory.decodeResource(getResources(),
+                R.drawable.whatsapp_logo);
+
+        RemoteViews contentView = new RemoteViews
+                (getPackageName(), R.layout.custom_notification);
+        contentView.setImageViewBitmap(R.id.image_notification, bitmap);
+        contentView.setTextViewText(R.id.title, title);
+        contentView.setTextViewText(R.id.text,
+                "This is a custom layout");
+        notification.contentView = contentView;
+
+        Intent notificationIntent = new Intent(this, MainActivity.class);
+        PendingIntent contentIntent = PendingIntent.getActivity(this,0,
+                notificationIntent, 0);
+        notification.contentIntent = contentIntent;
+
+        notification.flags |=
+                Notification.FLAG_AUTO_CANCEL; //Do not clear  the notification
+        notification.defaults |= Notification.DEFAULT_LIGHTS; // LED
+        notification.defaults |= Notification.DEFAULT_VIBRATE;//Vibration
+        notification.defaults |= Notification.DEFAULT_SOUND; // Sound
+
+        mNotificationManager.notify(1, notification);
     }
 
     @Override
@@ -72,25 +183,23 @@ public class MainActivity extends AppCompatActivity {
         unregisterReceiver(imageChangeBroadcastReceiver);
     }
 
-    /**
-     * Change Intercepted Notification Image
-     * Changes the MainActivity image based on which notification was intercepted
-     * @param notificationCode The intercepted notification code
-     */
-    private void changeInterceptedNotificationImage(int notificationCode){
-        switch(notificationCode){
-            case NotificationListenerExampleService.InterceptedNotificationCode.FACEBOOK_CODE:
-                interceptedNotificationImageView.setImageResource(R.drawable.facebook_logo);
-                break;
-            case NotificationListenerExampleService.InterceptedNotificationCode.INSTAGRAM_CODE:
-                interceptedNotificationImageView.setImageResource(R.drawable.instagram_logo);
-                break;
-            case NotificationListenerExampleService.InterceptedNotificationCode.WHATSAPP_CODE:
-                interceptedNotificationImageView.setImageResource(R.drawable.whatsapp_logo);
-                break;
-            case NotificationListenerExampleService.InterceptedNotificationCode.OTHER_NOTIFICATIONS_CODE:
-                interceptedNotificationImageView.setImageResource(R.drawable.other_notification_logo);
-                break;
+    private void drawNotification(StatusBarNotification sbn) {
+        if ( sbn == null ) {
+            Log.e(TAG, "SBN is null");
+            return;
+        }
+
+        LinearLayout ll = (LinearLayout) findViewById(R.id.linear_layout);
+        if ( sbn.getNotification().bigContentView != null ) {
+            View notificationView = sbn.getNotification().bigContentView
+                    .apply(getApplicationContext(), ll);
+            ll.addView(notificationView);
+        } else if (sbn.getNotification().contentView != null ) {
+            View notificationView = sbn.getNotification().contentView
+                    .apply(getApplicationContext(), ll);
+            ll.addView(notificationView);
+        } else {
+            Log.e(TAG, "Unable to draw - " + sbn);
         }
     }
 
@@ -127,8 +236,12 @@ public class MainActivity extends AppCompatActivity {
     public class ImageChangeBroadcastReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
-            int receivedNotificationCode = intent.getIntExtra("Notification Code",-1);
-            changeInterceptedNotificationImage(receivedNotificationCode);
+//            List<StatusBarNotification> notifications = NotificationListenerExampleService
+//                    .getInstance().getNotifications();
+
+//            for ( StatusBarNotification sbn : notifications) {
+//                drawNotification(sbn);
+//            }
         }
     }
 

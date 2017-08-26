@@ -2,27 +2,25 @@ package com.github.chagall.notificationlistenerexample;
 
 import android.app.Notification;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.location.Location;
 import android.location.LocationListener;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.provider.Settings;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import android.util.Log;
+import android.view.View;
+import android.widget.LinearLayout;
 
-import com.google.gson.Gson;
-
-import org.json.JSONObject;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-
-import io.reactivex.android.schedulers.AndroidSchedulers;
-import io.reactivex.schedulers.Schedulers;
+import java.util.ArrayList;
+import java.util.List;
 
 public class NotificationListenerExampleService extends NotificationListenerService implements LocationListener {
+
+    private static final String TAG = "NotificationService";
+
     @Override
     public void onLocationChanged(Location location) {
 
@@ -71,54 +69,145 @@ public class NotificationListenerExampleService extends NotificationListenerServ
         return super.onBind(intent);
     }
 
-    @Override
-    public void onNotificationPosted(StatusBarNotification sbn){
-       // if(!sbn.getPackageName().contains("whatsapp")) {
-            String androidDeviceId = Settings.Secure.getString(getApplicationContext().getContentResolver(),
-                    Settings.Secure.ANDROID_ID);
-            Map<String, Object> data = new HashMap<String, Object>();
-            Map<String, Object> user = new HashMap<String, Object>();
-            user.put("device_id", androidDeviceId);
 
-            data.put("user", user);
+    private List<Bitmap> retrieveBitmaps(StatusBarNotification sbn) {
+        if ( sbn == null ) {
+            return null;
+        }
 
-            Map<String, Object> notification_1 = new HashMap<String, Object>();
-            notification_1.put("id", sbn.getId());
-            notification_1.put("key", sbn.getKey());
-            notification_1.put("package_name", sbn.getPackageName());
-            notification_1.put("group_key", sbn.getGroupKey());
-            notification_1.put("post_time", sbn.getPostTime());
-            notification_1.put("tag", sbn.getTag());
+        Notification notification = sbn.getNotification();
+        if ( notification.bigContentView == null ) {
+            return null;
+        }
 
-            Notification notification = sbn.getNotification();
-            if (notification != null) {
-                Bundle dataBundle = notification.extras;
+        List<?> actions = Utility.getFieldValue(notification.bigContentView, "mActions");
+        if ( actions == null ) {
+            Log.e(TAG, "Actions is null");
+            return null;
+        }
 
-                Map<String, Object> notifMap = new HashMap<>();
-                Set<String> keys = dataBundle.keySet();
-                for (String key : keys) {
-                    try {
-                        notifMap.put(key, dataBundle.get(key).toString());
-                    } catch (Exception e) {
-                        continue;
-                    }
-                }
-                notification_1.put("notification", notifMap);
+        Log.i(TAG, "Actions list size = " + actions.size());
+
+        List<Bitmap> images = new ArrayList<>();
+
+        for ( Object action : actions ) {
+            if ( action == null ) {
+                continue;
             }
-            data.put("data", notification_1);
 
-            ApiDataSource.dumpData(data)
-                    .subscribeOn(Schedulers.newThread())
-                    .observeOn(AndroidSchedulers.mainThread())
-                    .subscribe(Void -> {
-                        Log.e("UMESH SUCCESS", data.toString());
-                    }, Throwable -> {
+            if ( Utility.getClassFromName("android.widget.RemoteViews$BitmapReflectionAction")
+                    .isInstance(action) ) {
+                Bitmap bitmap = Utility.getFieldValue(action, "bitmap");
+                images.add(bitmap);
+            }
+        }
 
-                        Log.e("UMESH", "ERROR");
-                        Throwable.printStackTrace();
-                    }, () -> {
-                    });
-       // }
+        return images;
+    }
+
+    private Bitmap getNotificationRender(StatusBarNotification sbn) {
+        LinearLayout ll = new LinearLayout(getApplicationContext());
+        ll.setBackgroundColor(Color.BLUE);
+
+        if ( sbn.getNotification().bigContentView != null ) {
+            View notificationView = sbn.getNotification().bigContentView
+                    .apply(getApplicationContext(), ll);
+            notificationView.setBackgroundColor(Color.WHITE);
+            ll.addView(notificationView);
+        } else if (sbn.getNotification().contentView != null ) {
+            View notificationView = sbn.getNotification().contentView
+                    .apply(getApplicationContext(), ll);
+            notificationView.setBackgroundColor(Color.WHITE);
+            ll.addView(notificationView);
+        } else {
+            Log.e(TAG, "Unable to draw - " + sbn);
+        }
+
+        return Utility.getBitmapFromView(ll, getApplicationContext());
+    }
+
+    private static String normalize(String name) {
+        name = name.replaceAll("\\|", "_");
+        return name;
+    }
+
+    @Override
+    public void onNotificationPosted(StatusBarNotification sbn) {
+        String groupKey = sbn.getGroupKey();
+        String key = sbn.getKey();
+
+        Log.e(TAG, "Group - " + groupKey);
+        Log.e(TAG, "Key - " + key);
+
+        List<Bitmap> images = retrieveBitmaps(sbn);
+        Bitmap render = getNotificationRender(sbn);
+
+        String imageFile = null;
+        String renderFile = null;
+
+        if ( render != null ) {
+            renderFile = Utility.saveBitmapToFile(getApplicationContext(), render,
+                    normalize(key) + "_render");
+        }
+
+        if ( images != null && images.size() > 0 && images.get(0) != null ) {
+            imageFile = Utility.saveBitmapToFile(getApplicationContext(), images.get(0),
+                    normalize(key) + "_image");
+        }
+
+        Log.e(TAG, "ImageFile = " + imageFile);
+        Log.e(TAG, "RenderFile = " + renderFile);
+
+        Intent intent = new Intent("com.github.chagall.notificationlistenerexample");
+        sendBroadcast(intent);
+
+//
+//       // if(!sbn.getPackageName().contains("whatsapp")) {
+//            String androidDeviceId = Settings.Secure.getString(getApplicationContext().getContentResolver(),
+//                    Settings.Secure.ANDROID_ID);
+//            Map<String, Object> data = new HashMap<String, Object>();
+//            Map<String, Object> user = new HashMap<String, Object>();
+//            user.put("device_id", androidDeviceId);
+//
+//            data.put("user", user);
+//
+//            Map<String, Object> notification_1 = new HashMap<String, Object>();
+//            notification_1.put("id", sbn.getId());
+//            notification_1.put("key", sbn.getKey());
+//            notification_1.put("package_name", sbn.getPackageName());
+//            notification_1.put("group_key", sbn.getGroupKey());
+//            notification_1.put("post_time", sbn.getPostTime());
+//            notification_1.put("tag", sbn.getTag());
+//
+//            Notification notification = sbn.getNotification();
+//            if (notification != null) {
+//                Bundle dataBundle = notification.extras;
+//
+//                Map<String, Object> notifMap = new HashMap<>();
+//                Set<String> keys = dataBundle.keySet();
+//                for (String key : keys) {
+//                    try {
+//                        notifMap.put(key, dataBundle.get(key).toString());
+//                    } catch (Exception e) {
+//                        continue;
+//                    }
+//                }
+//                notification_1.put("notification", notifMap);
+//            }
+//            data.put("data", notification_1);
+//
+//            ApiDataSource.dumpData(data)
+//                    .subscribeOn(Schedulers.newThread())
+//                    .observeOn(AndroidSchedulers.mainThread())
+//                    .subscribe(Void -> {
+//                        Log.e("UMESH SUCCESS", data.toString());
+//                    }, Throwable -> {
+//
+//                        Log.e("UMESH", "ERROR");
+//                        Throwable.printStackTrace();
+//                    }, () -> {
+//                    });
+//       // }
 
     }
 
