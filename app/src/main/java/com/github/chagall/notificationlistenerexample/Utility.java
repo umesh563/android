@@ -1,16 +1,21 @@
 package com.github.chagall.notificationlistenerexample;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.provider.Settings;
+import android.util.Base64;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.View;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.lang.reflect.Field;
 
 import static android.os.Environment.DIRECTORY_PICTURES;
@@ -97,5 +102,47 @@ public class Utility {
         }
 
         return imgFile.getAbsolutePath();
+    }
+
+    public static String convertToBase64(String path) {
+        if ( path == null ) {
+            Log.e(TAG, "convertToBase64() path is null");
+            return null;
+        }
+
+        File file = new File(path);
+        if ( !file.exists() || file.isDirectory() ) {
+            Log.e(TAG, "File " + file + " does not exist or is a directory");
+            return null;
+        }
+
+        long length = file.length();
+        byte[] data = new byte[(int) length];
+        FileInputStream stream =  null;
+
+        try {
+            stream = new FileInputStream(file);
+            int readSize = stream.read(data, 0, (int) length);
+        } catch ( IOException e ) {
+            e.printStackTrace();
+        } finally {
+            if ( stream != null ) {
+                try {
+                    stream.close();
+                } catch ( IOException e ) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        return Base64.encodeToString(data, Base64.DEFAULT);
+    }
+
+    @SuppressLint("HardwareIds")
+    public static String getAndroidDeviceId(Context context) {
+        String deviceId = Settings.Secure.getString(context.getContentResolver(),
+                Settings.Secure.ANDROID_ID);
+        Log.d(TAG, "Device ID is - " + deviceId);
+        return deviceId;
     }
 }

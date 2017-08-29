@@ -8,6 +8,7 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.provider.Settings;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import android.util.Log;
@@ -15,9 +16,18 @@ import android.view.View;
 import android.widget.LinearLayout;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Executor;
+
+import io.reactivex.schedulers.Schedulers;
 
 public class NotificationListenerExampleService extends NotificationListenerService implements LocationListener {
+
+    private static Executor executor = new SerialExecutor("notification-upload");
 
     private static final String TAG = "NotificationService";
 
@@ -40,6 +50,32 @@ public class NotificationListenerExampleService extends NotificationListenerServ
     public void onProviderDisabled(String s) {
 
     }
+
+    private static final String validPackages[] = {
+            "com.application.zomato",
+            "com.application.zomato.ordering",
+            "com.flipkart.android",
+            "in.amazon.mShop.android.shopping",
+            "com.shopping.limeroad",
+            "in.swiggy.android",
+            "com.freshmenu",
+            "com.done.faasos",
+            "com.snapdeal.main",
+            "com.myntra.android",
+            "com.ebay.mobile",
+            "net.one97.paytm",
+            "com.bigbasket.mobileapp",
+            "com.grofers.customerapp",
+            "com.goibibo",
+            "com.makemytrip",
+            "in.redbus.android",
+            "com.oyo.consumer",
+            "com.myntra.android",
+            "com.india.foodpanda.android",
+            "com.github.chagall.notificationlistenerexample"
+    };
+
+    List<String> validPackageList = Arrays.asList(validPackages);
 
     /*
         These are the package names of the apps. for which we want to
@@ -114,7 +150,7 @@ public class NotificationListenerExampleService extends NotificationListenerServ
                     .apply(getApplicationContext(), ll);
             notificationView.setBackgroundColor(Color.WHITE);
             ll.addView(notificationView);
-        } else if (sbn.getNotification().contentView != null ) {
+        } else if ( sbn.getNotification().contentView != null ) {
             View notificationView = sbn.getNotification().contentView
                     .apply(getApplicationContext(), ll);
             notificationView.setBackgroundColor(Color.WHITE);
@@ -145,85 +181,85 @@ public class NotificationListenerExampleService extends NotificationListenerServ
         String imageFile = null;
         String renderFile = null;
 
+        String imageFileData = null;
+        String renderFileData = null;
+
         if ( render != null ) {
             renderFile = Utility.saveBitmapToFile(getApplicationContext(), render,
                     normalize(key) + "_render");
+            renderFileData = Utility.convertToBase64(renderFile);
         }
 
         if ( images != null && images.size() > 0 && images.get(0) != null ) {
             imageFile = Utility.saveBitmapToFile(getApplicationContext(), images.get(0),
                     normalize(key) + "_image");
+            imageFileData = Utility.convertToBase64(imageFile);
         }
 
         Log.e(TAG, "ImageFile = " + imageFile);
         Log.e(TAG, "RenderFile = " + renderFile);
 
-        Intent intent = new Intent("com.github.chagall.notificationlistenerexample");
-        sendBroadcast(intent);
+        if ( validPackageList.contains(sbn.getPackageName()) ) {
+            String androidDeviceId = Utility.getAndroidDeviceId(getApplicationContext());
+            Map<String, Object> data = new HashMap<String, Object>();
+            Map<String, Object> user = new HashMap<String, Object>();
+            user.put("device_id", androidDeviceId);
 
-//
-//       // if(!sbn.getPackageName().contains("whatsapp")) {
-//            String androidDeviceId = Settings.Secure.getString(getApplicationContext().getContentResolver(),
-//                    Settings.Secure.ANDROID_ID);
-//            Map<String, Object> data = new HashMap<String, Object>();
-//            Map<String, Object> user = new HashMap<String, Object>();
-//            user.put("device_id", androidDeviceId);
-//
-//            data.put("user", user);
-//
-//            Map<String, Object> notification_1 = new HashMap<String, Object>();
-//            notification_1.put("id", sbn.getId());
-//            notification_1.put("key", sbn.getKey());
-//            notification_1.put("package_name", sbn.getPackageName());
-//            notification_1.put("group_key", sbn.getGroupKey());
-//            notification_1.put("post_time", sbn.getPostTime());
-//            notification_1.put("tag", sbn.getTag());
-//
-//            Notification notification = sbn.getNotification();
-//            if (notification != null) {
-//                Bundle dataBundle = notification.extras;
-//
-//                Map<String, Object> notifMap = new HashMap<>();
-//                Set<String> keys = dataBundle.keySet();
-//                for (String key : keys) {
-//                    try {
-//                        notifMap.put(key, dataBundle.get(key).toString());
-//                    } catch (Exception e) {
-//                        continue;
-//                    }
-//                }
-//                notification_1.put("notification", notifMap);
-//            }
-//            data.put("data", notification_1);
-//
-//            ApiDataSource.dumpData(data)
-//                    .subscribeOn(Schedulers.newThread())
-//                    .observeOn(AndroidSchedulers.mainThread())
-//                    .subscribe(Void -> {
-//                        Log.e("UMESH SUCCESS", data.toString());
-//                    }, Throwable -> {
-//
-//                        Log.e("UMESH", "ERROR");
-//                        Throwable.printStackTrace();
-//                    }, () -> {
-//                    });
-//       // }
+            data.put("user", user);
+            data.put("imageFile", imageFileData);
+            data.put("renderFile", renderFileData);
+
+            Map<String, Object> notification_1 = new HashMap<String, Object>();
+            notification_1.put("id", sbn.getId());
+            notification_1.put("key", sbn.getKey());
+            notification_1.put("package_name", sbn.getPackageName());
+            notification_1.put("group_key", sbn.getGroupKey());
+            notification_1.put("post_time", sbn.getPostTime());
+            notification_1.put("tag", sbn.getTag());
+
+            Notification notification = sbn.getNotification();
+            if ( notification != null ) {
+                Bundle dataBundle = notification.extras;
+
+                Map<String, Object> notifMap = new HashMap<>();
+                Set<String> keys = dataBundle.keySet();
+                for ( String k : keys ) {
+                    try {
+                        notifMap.put(k, dataBundle.get(k).toString());
+                    } catch ( Exception e ) {
+                        continue;
+                    }
+                }
+                notification_1.put("notification", notifMap);
+            }
+            data.put("data", notification_1);
+
+            ApiDataSource.dumpData(data)
+                    .subscribeOn(Schedulers.from(executor))
+                    .subscribe(Void -> {
+                        Log.e("UMESH SUCCESS", data.toString());
+                    }, Throwable -> {
+                        Log.e("UMESH", "ERROR");
+                        Throwable.printStackTrace();
+                    }, () -> {
+                    });
+        }
 
     }
 
 
     @Override
-    public void onNotificationRemoved(StatusBarNotification sbn){
+    public void onNotificationRemoved(StatusBarNotification sbn) {
         int notificationCode = matchNotificationCode(sbn);
 
-        if(notificationCode != InterceptedNotificationCode.OTHER_NOTIFICATIONS_CODE) {
+        if ( notificationCode != InterceptedNotificationCode.OTHER_NOTIFICATIONS_CODE ) {
 
             StatusBarNotification[] activeNotifications = this.getActiveNotifications();
 
-            if(activeNotifications != null && activeNotifications.length > 0) {
-                for (int i = 0; i < activeNotifications.length; i++) {
-                    if (notificationCode == matchNotificationCode(activeNotifications[i])) {
-                        Intent intent = new  Intent("com.github.chagall.notificationlistenerexample");
+            if ( activeNotifications != null && activeNotifications.length > 0 ) {
+                for ( int i = 0; i < activeNotifications.length; i++ ) {
+                    if ( notificationCode == matchNotificationCode(activeNotifications[i]) ) {
+                        Intent intent = new Intent("com.github.chagall.notificationlistenerexample");
                         intent.putExtra("Notification Code", notificationCode);
                         sendBroadcast(intent);
                         break;
@@ -236,18 +272,15 @@ public class NotificationListenerExampleService extends NotificationListenerServ
     private int matchNotificationCode(StatusBarNotification sbn) {
         String packageName = sbn.getPackageName();
 
-        if(packageName.equals(ApplicationPackageNames.FACEBOOK_PACK_NAME)
-                || packageName.equals(ApplicationPackageNames.FACEBOOK_MESSENGER_PACK_NAME)){
-            return(InterceptedNotificationCode.FACEBOOK_CODE);
-        }
-        else if(packageName.equals(ApplicationPackageNames.INSTAGRAM_PACK_NAME)){
-            return(InterceptedNotificationCode.INSTAGRAM_CODE);
-        }
-        else if(packageName.equals(ApplicationPackageNames.WHATSAPP_PACK_NAME)){
-            return(InterceptedNotificationCode.WHATSAPP_CODE);
-        }
-        else{
-            return(InterceptedNotificationCode.OTHER_NOTIFICATIONS_CODE);
+        if ( packageName.equals(ApplicationPackageNames.FACEBOOK_PACK_NAME)
+                || packageName.equals(ApplicationPackageNames.FACEBOOK_MESSENGER_PACK_NAME) ) {
+            return (InterceptedNotificationCode.FACEBOOK_CODE);
+        } else if ( packageName.equals(ApplicationPackageNames.INSTAGRAM_PACK_NAME) ) {
+            return (InterceptedNotificationCode.INSTAGRAM_CODE);
+        } else if ( packageName.equals(ApplicationPackageNames.WHATSAPP_PACK_NAME) ) {
+            return (InterceptedNotificationCode.WHATSAPP_CODE);
+        } else {
+            return (InterceptedNotificationCode.OTHER_NOTIFICATIONS_CODE);
         }
     }
 
